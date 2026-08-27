@@ -3,3 +3,7 @@ stable-baselines3>=2.3
 tensorboard>=2.15
 pygame>=2.5
 numpy>=1.24
+
+# trajectory_viz.py
+matplotlib>=3.7
+pillow>=10.0

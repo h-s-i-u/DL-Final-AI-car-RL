@@ -6,5 +6,17 @@ dist/
 build/
 .env
 *.log
-logs/
-*.ps1
+
+# Report and slides are hosted externally (they contain student ID numbers,
+# which should not be committed to a public repository). Linked from the README.
+*.pdf
+
+# --- Training artifacts ---
+# Results ARE tracked, so every number in the README can be verified and re-run:
+#   logs/*/eval_results.json  evaluation metrics quoted in the README
+#   logs/*/exp_config.json    exact configuration each run used
+#   logs/*/final_model.zip    trained policies (~150 KB each) — runnable via eval.py
+#   logs/tb/                  TensorBoard training curves
+# Only the intermediate checkpoints are excluded (~8.6 MB of mid-training state
+# that carries no information the final model and curves don't already provide).
+logs/**/checkpoints/

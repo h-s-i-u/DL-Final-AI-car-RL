@@ -1,0 +1,35 @@
+{
+  "experiment": "baseline",
+  "map": "assets/maps/map3.png",
+  "timesteps": 500000,
+  "n_envs": 16,
+  "seed": 42,
+  "reward_config": {
+    "progress": true,
+    "crash": false,
+    "speed": false,
+    "smooth": false,
+    "center": false
+  },
+  "obs_components": [
+    "radar"
+  ],
+  "hyperparams": {
+    "learning_rate": 0.0003,
+    "n_steps": 2048,
+    "batch_size": 64,
+    "n_epochs": 10,
+    "gamma": 0.99,
+    "gae_lambda": 0.95,
+    "clip_range": 0.2,
+    "ent_coef": 0.0,
+    "vf_coef": 0.5,
+    "max_grad_norm": 0.5
+  },
+  "policy_kwargs": {
+    "net_arch": [
+      64,
+      64
+    ]
+  }
+}

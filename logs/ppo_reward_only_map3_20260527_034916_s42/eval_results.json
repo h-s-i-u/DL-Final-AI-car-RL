@@ -1,0 +1,240 @@
+{
+  "n_episodes": 20,
+  "seed": 999,
+  "aggregate": {
+    "crash_rate": 1.0,
+    "mean_episode_length": 436.9,
+    "std_episode_length": 94.24377963558125,
+    "mean_distance": 5309.0,
+    "std_distance": 1140.4182566058823,
+    "mean_jerk": 0.8167418653177304,
+    "std_jerk": 0.039347157809154445,
+    "mean_action_switch_rate": 0.3262480385274827,
+    "std_action_switch_rate": 0.013941946607061646,
+    "lap_times_mean": null,
+    "lap_times_std": null,
+    "lap_completions_total": 0
+  },
+  "per_episode": [
+    {
+      "episode": 0,
+      "length": 515,
+      "crashed": true,
+      "distance": 6220.0,
+      "lap_count": 0,
+      "lap_times": [],
+      "mean_speed": 12.077669902912621,
+      "action_switch_rate": 0.3463035019455253,
+      "mean_jerk": 0.8696796145305463
+    },
+    {
+      "episode": 1,
+      "length": 323,
+      "crashed": true,
+      "distance": 3926.0,
+      "lap_count": 0,
+      "lap_times": [],
+      "mean_speed": 12.154798761609907,
+      "action_switch_rate": 0.30745341614906835,
+      "mean_jerk": 0.7632941836064611
+    },
+    {
+      "episode": 2,
+      "length": 324,
+      "crashed": true,
+      "distance": 3924.0,
+      "lap_count": 0,
+      "lap_times": [],
+      "mean_speed": 12.11111111111111,
+      "action_switch_rate": 0.3157894736842105,
+      "mean_jerk": 0.7755089472771183
+    },
+    {
+      "episode": 3,
+      "length": 512,
+      "crashed": true,
+      "distance": 6208.0,
+      "lap_count": 0,
+      "lap_times": [],
+      "mean_speed": 12.125,
+      "action_switch_rate": 0.33072407045009783,
+      "mean_jerk": 0.8206294439025709
+    },
+    {
+      "episode": 4,
+      "length": 322,
+      "crashed": true,
+      "distance": 3938.0,
+      "lap_count": 0,
+      "lap_times": [],
+      "mean_speed": 12.229813664596273,
+      "action_switch_rate": 0.308411214953271,
+      "mean_jerk": 0.7608447872144175
+    },
+    {
+      "episode": 5,
+      "length": 510,
+      "crashed": true,
+      "distance": 6216.0,
+      "lap_count": 0,
+      "lap_times": [],
+      "mean_speed": 12.188235294117646,
+      "action_switch_rate": 0.33988212180746563,
+      "mean_jerk": 0.8362698989762879
+    },
+    {
+      "episode": 6,
+      "length": 514,
+      "crashed": true,
+      "distance": 6264.0,
+      "lap_count": 0,
+      "lap_times": [],
+      "mean_speed": 12.186770428015564,
+      "action_switch_rate": 0.33723196881091616,
+      "mean_jerk": 0.8706196527046959
+    },
+    {
+      "episode": 7,
+      "length": 516,
+      "crashed": true,
+      "distance": 6252.0,
+      "lap_count": 0,
+      "lap_times": [],
+      "mean_speed": 12.116279069767442,
+      "action_switch_rate": 0.32038834951456313,
+      "mean_jerk": 0.8050266790382591
+    },
+    {
+      "episode": 8,
+      "length": 515,
+      "crashed": true,
+      "distance": 6274.0,
+      "lap_count": 0,
+      "lap_times": [],
+      "mean_speed": 12.18252427184466,
+      "action_switch_rate": 0.32879377431906615,
+      "mean_jerk": 0.8464243913507952
+    },
+    {
+      "episode": 9,
+      "length": 320,
+      "crashed": true,
+      "distance": 3916.0,
+      "lap_count": 0,
+      "lap_times": [],
+      "mean_speed": 12.2375,
+      "action_switch_rate": 0.30407523510971785,
+      "mean_jerk": 0.7602895875075885
+    },
+    {
+      "episode": 10,
+      "length": 511,
+      "crashed": true,
+      "distance": 6228.0,
+      "lap_count": 0,
+      "lap_times": [],
+      "mean_speed": 12.187866927592955,
+      "action_switch_rate": 0.3352941176470588,
+      "mean_jerk": 0.8524910303776543
+    },
+    {
+      "episode": 11,
+      "length": 514,
+      "crashed": true,
+      "distance": 6262.0,
+      "lap_count": 0,
+      "lap_times": [],
+      "mean_speed": 12.182879377431906,
+      "action_switch_rate": 0.3255360623781676,
+      "mean_jerk": 0.8306953981665535
+    },
+    {
+      "episode": 12,
+      "length": 515,
+      "crashed": true,
+      "distance": 6262.0,
+      "lap_count": 0,
+      "lap_times": [],
+      "mean_speed": 12.159223300970874,
+      "action_switch_rate": 0.33657587548638135,
+      "mean_jerk": 0.8630251877880745
+    },
+    {
+      "episode": 13,
+      "length": 319,
+      "crashed": true,
+      "distance": 3898.0,
+      "lap_count": 0,
+      "lap_times": [],
+      "mean_speed": 12.219435736677116,
+      "action_switch_rate": 0.3050314465408805,
+      "mean_jerk": 0.7780704042931645
+    },
+    {
+      "episode": 14,
+      "length": 518,
+      "crashed": true,
+      "distance": 6240.0,
+      "lap_count": 0,
+      "lap_times": [],
+      "mean_speed": 12.046332046332047,
+      "action_switch_rate": 0.344294003868472,
+      "mean_jerk": 0.8426644661710597
+    },
+    {
+      "episode": 15,
+      "length": 513,
+      "crashed": true,
+      "distance": 6224.0,
+      "lap_count": 0,
+      "lap_times": [],
+      "mean_speed": 12.132553606237817,
+      "action_switch_rate": 0.3515625,
+      "mean_jerk": 0.8783065291136808
+    },
+    {
+      "episode": 16,
+      "length": 513,
+      "crashed": true,
+      "distance": 6230.0,
+      "lap_count": 0,
+      "lap_times": [],
+      "mean_speed": 12.144249512670566,
+      "action_switch_rate": 0.326171875,
+      "mean_jerk": 0.8277762344398335
+    },
+    {
+      "episode": 17,
+      "length": 321,
+      "crashed": true,
+      "distance": 3926.0,
+      "lap_count": 0,
+      "lap_times": [],
+      "mean_speed": 12.230529595015577,
+      "action_switch_rate": 0.3125,
+      "mean_jerk": 0.7918417178634839
+    },
+    {
+      "episode": 18,
+      "length": 323,
+      "crashed": true,
+      "distance": 3894.0,
+      "lap_count": 0,
+      "lap_times": [],
+      "mean_speed": 12.055727554179567,
+      "action_switch_rate": 0.32919254658385094,
+      "mean_jerk": 0.7862581577655356
+    },
+    {
+      "episode": 19,
+      "length": 320,
+      "crashed": true,
+      "distance": 3878.0,
+      "lap_count": 0,
+      "lap_times": [],
+      "mean_speed": 12.11875,
+      "action_switch_rate": 0.31974921630094044,
+      "mean_jerk": 0.775120994266827
+    }
+  ]
+}
