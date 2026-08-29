@@ -1,16 +1,16 @@
 # Self-Driving Car Simulation with Deep RL — Reward vs. Observation Design
 
-> **A Comparative Study of Reward and Observation Design**
-> Department of Computer Science, Tunghai University — Undergraduate Capstone Project (專題報告)
-> Advisor: Prof. 陳仕偉 · Authors: 黃子修, 鄭聿宏, 侯姿佑 · June 2026
+> **PPO vs NEAT — A Comparative Study of Reward Shaping and Observation Engineering**
+> Deep Learning course final report · Department of Computer Science, Tunghai University
+> 黃子修 · 鄭聿宏 · 侯姿佑 — June 2026
 
 This project takes the open-source [NeuralNine/ai-car-simulation](https://github.com/NeuralNine/ai-car-simulation) — which trains a 2D self-driving car with **NEAT**, a gradient-free neuroevolution method — and rebuilds it into a standard **Gymnasium environment** trained with **PPO (Stable-Baselines3)**, turning it into a platform for systematic ablation.
 
-With the algorithm, hyperparameters, and seed all held fixed, we ask:
+With the algorithm, hyperparameters, and random seed all held fixed, we ask:
 
-> **Which matters more for policy quality — reward shaping or observation design — and which aspect of quality does each one actually improve?**
+> **For PPO, does changing the reward design or changing the observation design matter more — and which aspect of policy quality does each one affect?**
 
-This matters practically: when engineering effort is limited, should it go into *reward engineering* or into *representation design*? We answer it with a **2×2 factorial ablation** in which the only variables are the reward composition and the observation composition.
+We answer it with a **2×2 ablation** in which the only variables are the reward composition and the observation composition.
 
 **Documents:** [Full written report and presentation slides](https://drive.google.com/drive/folders/1uO0yORbg89gwcLztfRHHgSC6nyjCx31R?usp=sharing) (Google Drive)
 
@@ -18,15 +18,12 @@ This matters practically: when engineering effort is limited, should it go into 
 
 ## TL;DR — Key Findings
 
-1. **Reward shaping and observation augmentation are complementary, not interchangeable.** Each alone lifts mean survival from 276 to ~437 steps — a statistical dead heat. The difference is *which* aspect of quality each one fixes:
-   - **Observation augmentation collapses variance** (std 88 → **5** steps) but triples control jerk (0.85 → 2.25).
-   - **Reward shaping preserves smoothness** (jerk 0.82, the best of all four) but leaves variance high (± 94).
-   - Only the **`full`** condition gets high mean *and* low variance together (470 ± 12).
-2. **Their gains overlap on any single metric.** Combined, survival reaches only +70% over baseline, far short of the ~150% that independent effects would predict — the two interventions are relieving much of the same bottleneck.
-3. **Naive PPO fails completely across track geometries.** A policy trained on the easy oval reaches **0% crash / full 1500 steps** in-distribution, but scores **100% crash / 22 ± 0.7 steps** on the winding track. We give a geometric explanation for *why* in [§7](#7-geometric-analysis-why-transfer-fails-and-why-policies-slow-down).
-4. **Two honest caveats up front:** all runs use a **single seed**, and at 500k steps **none of the training curves had plateaued**. These results are therefore a **sample-efficiency comparison, not asymptotic performance.**
-
-> This repository is a controlled ablation study, not a showcase of a finished racing agent. Every number below is taken verbatim from the `eval_results.json` files and TensorBoard logs produced by the runs described in §4 — **all of which are committed to this repository** (see [§11](#11-verifying-the-results)), so any claim here can be independently re-run.
+1. **Reward shaping and observation augmentation are complementary, not interchangeable.** Both lift mean survival from 276 to ~437 steps — indistinguishable on the mean. The difference shows up elsewhere:
+   - **Observation augmentation drives down variance** (std 88 → **5** steps), but leaves jerk high (2.25).
+   - **Reward shaping keeps motion smooth** (jerk 0.82), but variance stays high (± 94).
+   - Only the **`full`** condition achieves the highest mean *and* the lowest variance at once (470 ± 12).
+2. **Naive PPO does not generalize across track geometries.** A policy trained on the easy oval reaches **0% crash / 1500 steps survived** in-distribution, but **100% crash / 22 ± 0.7 steps** on the winding track — it crashes at roughly the first corner.
+3. **Two caveats stated up front:** all runs use a **single seed**, and at 500k steps **none of the training curves had plateaued**. These results are a **sample-efficiency comparison, not asymptotic performance.**
 
 ---
 
@@ -34,252 +31,227 @@ This matters practically: when engineering effort is limited, should it go into 
 
 | Role | Person |
 |---|---|
-| Environment refactor (Gymnasium), PPO training pipeline, modular reward/observation design, ablation design, evaluation metrics, geometric analysis — i.e. all code and experiments | **黃子修** |
+| Environment refactor (Gymnasium), PPO training pipeline, modular reward/observation design, ablation design, evaluation metrics — i.e. all code and experiments | **黃子修** |
 | Presentation delivery | 鄭聿宏, 侯姿佑 |
-
-Submitted as a team capstone; the report PDF lists all three authors per course submission requirements.
 
 ---
 
 ## 1. Background: Why Replace NEAT with PPO?
 
-The original project uses **NEAT** (Stanley & Miikkulainen, 2002), which evolves network weights *and* topology via a genetic algorithm. It never computes a gradient — so strictly speaking it falls outside deep learning, which was the first problem for a deep-learning course project.
+The original project uses **NEAT** (Stanley & Miikkulainen, 2002), which applies a genetic algorithm to mutate and cross over both the weights and the topology of a neural network. The whole process is gradient-free, so strictly speaking it does not fall under deep learning.
 
-The deeper motivation was methodological. **NEAT's fitness is a single scalar computed only at the end of an episode**, which makes it nearly impossible to attribute an improvement to any individual design decision. Recasting the task as PPO with *pluggable* reward and observation components is precisely what makes component-wise ablation possible.
+PPO, by contrast, is a policy gradient method that updates the policy network by backpropagation. It has higher sample efficiency, and because it is differentiable it supports many kinds of fine-grained analysis that are difficult under NEAT.
 
 | Aspect | NEAT (original) | PPO (this project) |
 |---|---|---|
-| Learning method | Genetic algorithm | Policy gradient (Actor–Critic) |
+| Learning method | Genetic algorithm | Policy gradient |
 | Parameter update | Mutation + crossover | Backpropagation |
-| Uses gradients | No | Yes (clipped surrogate objective) |
+| Gradients | None (gradient-free) | Yes (clipped surrogate) |
 | Sample efficiency | Low | High |
 | Deep learning | ✗ | ✓ |
 
-For comparability, the `progress` reward is deliberately defined as `speed / 30` — its cumulative return is proportional to total distance travelled, mirroring the distance-based fitness of the original NEAT setup, so the baseline is a fair analogue of the original.
+**Contributions of this project:**
+- Refactor a NEAT-only project into a standard Gymnasium environment with **modular** reward and observation design, so any ablation requires only a config change.
+- Use a 2×2 ablation to disentangle the different roles reward shaping and observation augmentation play in policy quality.
+- Quantify naive PPO's generalization failure through cross-track evaluation.
 
 ---
 
-## 2. Environment Engineering (`car_env.py`)
+## 2. Problem Definition and Environment
 
-The original simulation was tightly coupled to NEAT and the pygame draw loop. Three refactors made it trainable:
+### 2.1 Task
 
-1. **Gymnasium API** — implemented `reset` / `step` / `observation_space` / `action_space` so SB3's PPO can drive it directly, and so it can be vectorized with `SubprocVecEnv`.
-2. **Headless + array-based sensing** — `SDL_VIDEODRIVER=dummy` removes the window during training, and collision/radar lookups read a NumPy array (`pygame.surfarray.array3d`) instead of per-pixel `Surface.get_at()` calls.
-3. **Modular components** — reward and observation are both decomposed into independently toggleable pieces driven by a config dict, so **any ablation combination requires only a config change, never a code change.**
+The car must drive on a 2D track without hitting the white boundary. Two tracks are used:
 
-### Task Definition (MDP)
-- **State** — 5 radar distances at −90°, −45°, 0°, +45°, +90° (baseline); optionally extended (§3.2)
-- **Action** — `Discrete(4)`: turn left 10°, turn right 10°, decelerate −2, accelerate +2; speed clamped to `[12, 40]`
-- **Termination** — collision with the white boundary, **or** the 1500-step cap
+<table>
+<tr>
+<td width="50%"><img src="assets/maps/map.png" alt="map.png — easy oval"></td>
+<td width="50%"><img src="assets/maps/map3.png" alt="map3.png — winding, multi-turn"></td>
+</tr>
+<tr>
+<td align="center"><code>map.png</code> — easy oval</td>
+<td align="center"><code>map3.png</code> — winding, multi-turn</td>
+</tr>
+</table>
 
-> **Note: the action space has no no-op.** Every step must change heading or speed. This becomes important in §7.
+The green-and-white checkered band at the bottom of each track is the start / finish line. `map3.png` plays the key role in the generalization test.
 
-### Lap Detection (`_check_lap`)
-Implemented as **segment intersection plus a directionality test**: a lap counts only when the car's centre path crosses the finish line *and* the displacement vector has positive dot product with `forward_dir`. This rejects false laps from reversing or jittering on the line. A 5-step grace period follows each reset.
+The MDP is defined as:
+
+- **State** — 5 radar sensors at −90°, −45°, 0°, +45°, +90°, returning the distance from the car's centre to the white boundary.
+- **Action** — 4 discrete actions: turn left, turn right, slow down, speed up.
+- **Termination** — the car hits the white boundary, or the 1500-step cap is reached.
+
+### 2.2 Environment Engineering
+
+The original repo coupled the simulation logic tightly to NEAT and the pygame main loop, so PPO could not use it directly. Three refactors:
+
+- **Gymnasium API** — implemented `reset` / `step` / `observation_space` / `action_space` so the environment can be called directly by Stable-Baselines3's PPO with no changes on the algorithm side.
+- **Headless pygame** — `SDL_VIDEODRIVER=dummy` runs training without a window, and collision detection and radar distance lookups were converted from per-pixel `pygame.get_at` calls to NumPy array indexing, greatly speeding up simulation.
+- **Modular components** — reward and observation are both decomposed into independently toggleable pieces controlled by a dictionary toggle. This is the foundation of the ablation: any experimental combination requires only a config change, never a code change.
 
 ---
 
-## 3. Design Axes
+## 3. Method
 
-### 3.1 Reward Components
-Total reward is the sum of enabled components. **Formulas and weights are never modified during ablation** — only toggled — so the comparison stays clean.
+### 3.1 PPO
 
-| Component | Formula | Intent | Magnitude @ speed ≈ 13 |
+PPO uses an Actor–Critic architecture. The environment supplies an observation, the policy network (actor) chooses an action, and the environment returns a reward; GAE (Generalized Advantage Estimation) then estimates the advantage, and the policy is updated with a clipped surrogate objective. The clipping mechanism limits how far the policy can move in a single update, which is where the "Proximal" in the name comes from.
+
+The policy is SB3's `MlpPolicy`, trained **on CPU**. Because the state is only 5–24 dimensions and the network is tiny (two layers of 64 units), using a GPU is actually slower due to kernel-launch and memory-transfer overhead — CPU measured faster in practice.
+
+All ablation experiments lock the same hyperparameters to keep the comparison fair:
+
+| Hyperparameter | Value | Hyperparameter | Value |
 |---|---|---|---|
-| `progress` | `speed / 30` | Encourage forward travel (NEAT distance proxy) | **≈ 0.44** ← dominant |
-| `center` | `0.1 × (1 − \|L−R\| / (L+R))` | Reward staying mid-track | ≤ 0.10 |
-| `smooth` | `−0.05` on action change | Reduce jittery control | ≈ −0.03 |
-| `crash` | `−1.0` on collision (terminal) | Penalize crashing | −1.0 (one-off) |
-| `speed` | `0.01 × (speed−12) / 28` | Encourage higher speed | **≈ 0.0005** |
+| `learning_rate` | 3e-4 | `gae_lambda` | 0.95 |
+| `n_steps` | 2048 | `clip_range` | 0.2 |
+| `batch_size` | 64 | `ent_coef` | 0.0 |
+| `n_epochs` | 10 | `vf_coef` | 0.5 |
+| `gamma` | 0.99 | `net_arch` | [64, 64] |
+| `activation` | tanh | | |
 
-### 3.2 Observation Components
-All normalized to `[-1, 1]`.
+### 3.2 Reward Components
+
+Reward is the first design axis. Total reward is the sum of the enabled components, toggled from the config file; **formulas and weights are never modified during ablation**. The baseline enables only `R_progress` (mimicking the original NEAT distance fitness); `full` enables all five.
+
+| Component | Formula | Intent |
+|---|---|---|
+| `R_progress` | `speed / 30` | Encourage forward travel (NEAT distance proxy) |
+| `R_crash` | `−1` (on crash) | Penalize hitting the wall |
+| `R_speed` | `0.01 · (speed−12)/(40−12)` | Encourage higher speed |
+| `R_smooth` | `−0.05` (on action change) | Reduce jittery actions |
+| `R_center` | `0.1 · (1 − \|L−R\|/(L+R))` | Reward staying mid-track |
+
+*(L and R are the left and right radar distances.)*
+
+### 3.3 Observation Components
+
+Observation is the second design axis, also composable. The baseline holds only the original NEAT 5-dim radar; `full` adds speed, heading, and action history for 24 dims. Heading is encoded as sin/cos to avoid the numeric jump between 0° and 360°; action history is a one-hot encoding of the last four actions, serving as a hand-built short-term memory (a recurrence proxy).
 
 | Component | Dims | Intent |
 |---|---|---|
-| `radar` (baseline) | 5 | Distance to boundary (L / FL / F / FR / R) |
+| `radar` | 5 | Surrounding distances (L / FL / F / FR / R) |
 | `speed` | 1 | Own current speed |
-| `angle` (sin/cos) | 2 | Heading, encoded to avoid the 0°/360° discontinuity |
-| `action_history` | 16 | One-hot of the last 4 actions — a hand-built short-term memory |
+| `angle` (sin/cos) | 2 | Heading, avoiding the 0°/360° jump |
+| `action_history` | 16 | Last 4 actions one-hot, short-term memory |
 | **Total** | **5 → 24** | baseline → full |
 
 ---
 
 ## 4. Experimental Design
 
+Reward and observation form the two axes of a 2×2 ablation, giving four conditions. All four train on `map3` for 500k steps with the seed fixed at 42.
+
 | Condition | Observation | Reward |
 |---|---|---|
-| `baseline` | radar (5) | `progress` only |
+| `baseline` | radar (5) | progress only |
 | `reward_only` | radar (5) | all 5 components |
-| `obs_only` | full (24) | `progress` only |
+| `obs_only` | full (24) | progress only |
 | `full` | full (24) | all 5 components |
 
-**Held constant across all four:** PPO hyperparameters (SB3 defaults: `lr=3e-4`, `n_steps=2048`, `batch_size=64`, `n_epochs=10`, `γ=0.99`, `gae_lambda=0.95`, `clip=0.2`, `net_arch=[64,64]`, `tanh`), 500,000 timesteps, 16 parallel envs, `seed=42`, and the training map `map3.png`.
+**Generalization evaluation.** Beyond in-distribution evaluation, a cross-track test takes the policy trained on the easy track `map` and evaluates it directly on the complex track `map3`, to check whether the policy has overfit to the training track's geometry.
 
-**Evaluation protocol:** 20 episodes, `seed=999`, deterministic policy, with a **±15° random perturbation of the starting heading** to probe robustness to initial pose. Metrics: survival steps, crash rate, **jerk** (mean norm of the third difference of position), and **action switch rate**.
+**Metrics.** Each model runs 20 episodes with a deterministic policy, applying a **±15° random perturbation to the starting heading** to test robustness. The main metrics:
 
-**Generalization test:** a model trained on the easy oval `map.png` is evaluated directly on `map3.png`, unchanged.
-
-**Training on CPU.** With 5–24 observation dims and a `[64, 64]` MLP, GPU kernel-launch and transfer overhead outweighs the compute; CPU measured faster.
+- **Episode length** — steps survived, reflecting the policy's ability to avoid crashing.
+- **Crash rate** — proportion of episodes ending in a collision.
+- **Jerk** — norm of the third difference of trajectory coordinates, quantifying smoothness.
+- **Action switch rate** — proportion of consecutive steps where the action changes, reflecting decision jitter.
 
 ---
 
 ## 5. Results
 
-### 5.1 Training Curves (map3, 500k steps)
+### 5.1 Training Curves
 
-Final `rollout/ep_rew_mean`, read from the TensorBoard logs:
+![Training curves for the four conditions](docs/training_curves.png)
 
-| Rank | Condition | ep_rew_mean @ 500k | ep_len_mean @ 500k | Slope over final quarter |
-|---|---|---|---|---|
-| 1 | `reward_only` | **177** | 359 | +64 / 100k steps |
-| 2 | `full` | 167 | 331 | +60 / 100k steps |
-| 3 | `obs_only` | 131 | 261 | **+72 / 100k steps** |
-| 4 | `baseline` | 102 | 217 | +33 / 100k steps |
+*Left: `ep_len_mean`. Right: `ep_rew_mean`. Pink = baseline, green = full, purple = obs_only, orange = reward_only.*
 
-**All four curves were still climbing at 500k with no plateau.** This ranking is therefore a snapshot of **sample efficiency**, not converged performance — and note that `obs_only`, ranked 3rd, had the *steepest* final slope and was still accelerating, so the ordering could well change with a longer budget.
+By final `ep_rew_mean`, the ranking is **reward_only (177) > full (166) > obs_only (131) > baseline (101)**.
 
-### 5.2 Ablation Results (map3, eval, n = 20)
+One point deserves emphasis: **all four curves were still rising at 500k steps with no sign of a plateau — training had not converged.** This comparison should therefore be read as one of **sample efficiency** (which learns fastest for a given step budget), not of asymptotic performance.
 
-| Condition | Obs | Reward | Survival (steps) | Distance | Mean speed | Jerk ↓ | Switch rate ↓ | Crash |
-|---|---|---|---|---|---|---|---|---|
-| `baseline` | 5 | progress | 276 ± 88 | 3379 ± 1069 | 12.26 | **0.85** | **32.1%** | 100% |
-| `reward_only` | 5 | all | 437 ± 94 | 5309 ± 1140 | 12.15 | **0.82** | **32.6%** | 100% |
-| `obs_only` | 24 | progress | 436 ± **5** | **6370 ± 30** | 14.60 | 2.25 | 51.0% | 100% |
-| `full` | 24 | all | **470 ± 12** | 6241 ± 48 | 13.28 | 2.35 | 58.6% | 100% |
+### 5.2 Generalization Failure
 
-*(Evaluation numbers exceed the training curves because evaluation uses a deterministic policy while training samples stochastically.)*
-
-**Improvement over baseline:**
-
-| | Survival | Distance |
-|---|---|---|
-| `reward_only` | +58.3% | +57.1% |
-| `obs_only` | +58.1% | +88.5% |
-| `full` | +70.3% | +84.7% |
-| *if the two effects were independent (predicted)* | *+150%* | *+196%* |
-
-### 5.3 Generalization Failure
+The cross-track result is striking.
 
 | | Crash rate | Survival |
 |---|---|---|
-| **In-distribution** (train `map.png` → eval `map.png`) | **0%** | 1500 steps (full episode) |
-| **Out-of-distribution** (train `map.png` → eval `map3.png`) | **100%** | **22 ± 0.7 steps** |
+| **In-distribution** (train `map` → eval `map`) | **0%** | 1500 steps (full episode) |
+| **Out-of-distribution** (train `map` → eval `map3`) | **100%** | **22 ± 0.7 steps** |
 
-A policy that looks *perfect* on its training track fails at the very first corner of a different one. The std of 0.7 steps shows the failure is not stochastic — it is a deterministic, structural mismatch. §7 explains the mechanism.
+A policy trained on the easy track achieves a 0% crash rate and survives the full 1500 steps on that same track; moved to `map3`, the identical model crashes 100% of the time after an average of just 22 steps — roughly the point where the car meets its first corner. Naive PPO completely fails to generalize to a different track geometry: the policy looks flawless on its training track, but collapses the moment the shape changes.
+
+### 5.3 Ablation Results
+
+Because every condition has a 100% crash rate and none completes a full lap, **episode length serves as the survival proxy metric**.
+
+| Condition | Ep len ↑ | Crash | Jerk ↓ | Action switch ↓ |
+|---|---|---|---|---|
+| `baseline` | 276 ± 88 | 100% | **0.85** | **32%** |
+| `reward_only` | 437 ± 94 | 100% | **0.82** | **33%** |
+| `obs_only` | 436 ± **5** | 100% | 2.25 | 51% |
+| `full` | **470 ± 12** | 100% | 2.35 | 59% |
+
+*Evaluation on `map3`, n = 20 episodes.*
+
+### 5.4 Trajectory Analysis
+
+![Full model driving on map3](docs/driving_map3.png)
+
+*The `full` model on `map3`. The green line segments around the car body are the five radars; the checkered band at the bottom is the start / finish line.*
+
+The car travels from the start point at the bottom, negotiates the several corners on the left, and reaches the upper-right region — the policy has learned to handle most of the corners in the first part of the track, but still fails on the consecutive hairpins later on. This is consistent with the §5.1 observation that training had not converged: the policy has not yet fully learned the harder parts of the track.
 
 ---
 
-## 6. Analysis: Reward and Observation Play Different Roles
+## 6. Discussion: Reward and Observation Play Different Roles
 
-The headline finding is that these two axes are **complementary rather than interchangeable**:
+The core finding is that reward shaping and observation augmentation are **not substitutes for one another** — they act on different aspects of policy quality.
 
 | Aspect | Reward shaping | Observation augmentation |
 |---|---|---|
-| Mean performance | ✓ 276 → 437 | ✓ 276 → 436 |
+| Mean performance | ✓ large gain (276 → 437) | ✓ large gain (276 → 436) |
 | Variance (std) | ✗ high (± 94) | ✓ **very low (± 5)** |
 | Action smoothness | ✓ **low jerk (0.82)** | ✗ high jerk (2.25) |
 
-Three points follow.
+Both lift mean survival from the baseline's 276 to roughly 437, making them **indistinguishable on the mean**. The difference appears in the variance: `reward_only`'s standard deviation actually widens to 94, while `obs_only` compresses it from 88 down to 5 — reducing variance is the *observation* axis's function, not the reward axis's. On smoothness the situation reverses: `reward_only` has low jerk thanks to the `R_smooth` penalty, while `obs_only`, lacking any smoothness signal, is jerkier.
 
-**(a) On mean survival they are a dead heat, and their gains overlap.** +58.3% vs +58.1% individually, but only +70.3% together — far below the +150% independent effects would give. On *distance*, `full` (6241) is actually *below* `obs_only` (6370). Both interventions appear to be relieving much of the same bottleneck (getting the car to slow down and stay centred), so once one has done so, the other has little headroom and may even interfere through competition among reward terms.
+So: **reward drives absolute performance, observation drives robustness.** Only the `full` condition (470 ± 12), which uses both, achieves the highest mean and the lowest variance among the four. This echoes the classic argument in RL about representation learning versus reward engineering — the two solve different problems and should not be treated as substitutes.
 
-**(b) Variance reduction is the observation axis's job alone.** Enriching observations cuts the survival std from 88 to **5** and the distance std from 1069 to 30, making the policy almost insensitive to the ±15° start perturbation. This is evidence that the 5-dim radar-only setup makes the task **partially observable (a POMDP)** — the policy cannot infer its own speed or heading from range readings alone, so behaviour is not reproducible until proprioceptive state is supplied.
-
-**(c) Smoothness is the reward axis's job — but the `smooth` term still failed.** `full` adds a `−0.05` action-change penalty on top of `obs_only`, yet the switch rate *rose* (51.0% → 58.6%) and jerk rose slightly (2.25 → 2.35). Magnitude analysis explains why: at speed ≈ 13, `progress` contributes ≈ 0.44 per step while the expected `smooth` penalty is only ≈ −0.03, roughly 7% of it — not enough to shift the policy's preferences.
-
-### A methodological caveat on the reward ablation
-Two of the five reward terms are **numerically inert**:
-
-- **`speed`** caps at 0.01, which is **0.75%** of `progress`'s maximum of 1.33. At the observed speeds it contributes ≈ 0.0005 — indistinguishable from being switched off.
-- **`crash`** applies a one-off `−1.0`, roughly **0.5%** of the true opportunity cost of crashing early (~400 lost steps × 0.44 ≈ 176 of forgone return). `progress` already encodes a far stronger *implicit* crash penalty, making this term largely redundant.
-
-So `reward_only`'s gain most plausibly comes from **`center` alone**. The lesson is that toggling reward components on and off is not sufficient — **their magnitudes must be aligned first**, or a nominally "enabled" component may do nothing and the ablation conclusion becomes misleading.
+The cross-track failure in §5.2 further suggests that a PPO policy trained on a single track learns something highly **track-specific**. Since the observation contains only local radar information and training introduced no track diversity, the policy has likely memorized the training track's particular sequence of corners rather than learning a general "follow the wall" principle.
 
 ---
 
-## 7. Geometric Analysis: Why Transfer Fails, and Why Policies Slow Down
+## 7. Limitations
 
-The generalization failure in §5.3 is usually reported as an empirical fact. Measuring the environment's geometry gives a concrete mechanism.
+Stated honestly — these are directions for future work, not a retraction of the results.
 
-### 7.1 Minimum turning radius is set by speed
-
-The car advances a fixed `speed` pixels per step while turning a fixed 10°, so its path curvature radius is:
-
-```
-R = speed / radians(10) = speed / 0.1745
-```
-
-| Speed | Min turning radius | Turning diameter |
-|---|---|---|
-| 12 (floor) | 69 px | 138 px |
-| 20 (initial) | 115 px | 229 px |
-| **27.2** (learned on `map.png`) | **156 px** | **312 px** |
-| 40 (ceiling) | 229 px | 458 px |
-
-Measuring drivable clearance with a distance transform: **the maximum clearance radius anywhere on `map3.png` is 83 px** — i.e. the widest corridor on the entire map is about 166 px across, and the car's own collision radius is 30 px.
-
-### 7.2 This explains the transfer failure
-
-The `map.png`-trained policy cruises at **27.2 px/step**. That is optimal on a wide, gently-curving oval, where the required turn radius is large. But it *couples* the policy to a **minimum turning circle of 312 px** — nearly **twice the width of the widest corridor on `map3`**.
-
-The policy is therefore not merely under-trained on `map3`; at its learned cruising speed it is **geometrically incapable of negotiating the first tight corner**. That is exactly what a 22 ± 0.7 step deterministic crash looks like.
-
-**Speed and minimum curvature are coupled through the fixed 10° steering increment.** A policy that learns a fast cruising speed on an easy track acquires a large minimum turning radius as a side effect, and that radius is what fails to transfer.
-
-### 7.3 The same mechanism explains the speed floor
-
-All four `map3` conditions converge to a mean speed of **12.15–14.60**, hugging the floor of 12 despite a ceiling of 40. Under the coupling above, **slowing down is the only lever the agent has for shrinking its turning radius** into the feasible range for a winding track. The convergence is not incidental — it is forced by the geometry.
-
-### 7.4 A related artifact: the missing no-op
-
-Because the action space offers only {left, right, decelerate, accelerate}, "drive straight" must be approximated by alternating ±10°, producing a zig-zag by construction. But note that in `step()`, decelerating does nothing when `speed − 2 < 12` — so **once speed is pinned to the floor, `decelerate` degenerates into an effective no-op**, and the policy gains a way to travel straight.
-
-The data is consistent with policies exploiting this:
-
-| Condition | Mean speed | Jerk | Switch rate |
-|---|---|---|---|
-| `reward_only` | 12.15 | 0.82 | 32.6% |
-| `baseline` | 12.26 | 0.85 | 32.1% |
-| `full` | 13.28 | 2.35 | 58.6% |
-| `obs_only` | 14.60 | 2.25 | 51.0% |
-
-The two conditions pinned to the floor show jerk ≈ 0.8; the two that drift above it — and must therefore alternate turns to go straight — rise past 2.2.
-
-> ⚠️ §7.3 and §7.4 are **mechanistic inferences consistent with the measurements**, not yet confirmed by a controlled re-run with an explicit no-op action and a finer steering increment. Because training had also not converged (§5.1), we **cannot claim the action space is the sole binding constraint** — only that it is a measurable, previously unexamined one. Distinguishing the two explanations is the top-priority follow-up.
+1. **Single random seed.** The standard practice for RL reproducibility is 3–5 seeds (Henderson et al., 2018). Given the project's time constraints, only `seed=42` was run, so seed variance cannot be estimated.
+2. **500k steps is not converged.** All training curves were still rising at 500k, so the results are a sample-efficiency comparison, not an asymptotic-performance comparison.
+3. **No complete lap on `map3`.** No model finished a full lap, so episode length is used as a survival proxy rather than a true lap time.
+4. **Hand-tuned reward weights.** The reward component coefficients (0.05, 0.1, etc.) were set by intuition, with no weight-sensitivity ablation.
 
 ---
 
-## 8. Limitations
+## 8. Future Work
 
-Stated plainly — these mark future work, not a retraction of the results.
-
-1. **Single seed.** All runs use `seed=42`. The standard for RL reproducibility is 3–5 seeds (Henderson et al., 2018). The `±` values reported here reflect variance **across evaluation episodes** (from start-angle perturbation), **not across training runs**, so between-condition differences carry no statistical significance test.
-2. **500k steps is not converged.** All four curves were still rising. Results compare **sample efficiency**, not asymptotic performance.
-3. **No lap completions on `map3`.** Every condition crashes before finishing a lap, so **survival steps serve as a proxy** for the real objective of lap time. Note that episodes end at 276–470 steps against a 1500-step cap — they are terminated by *crashing*, not by exhausting the step budget.
-4. **Hand-tuned reward weights.** Coefficients (0.05, 0.1, …) were set by intuition, with no weight-sensitivity ablation — and §6 shows two of them are numerically inert as a result.
-5. **Limited map calibration.** `assets/maps/` holds 6 maps, but only `map.png` and `map3.png` have finish lines and start poses configured in `MAP_INFO`; `map2/4/5/6` are not yet calibrated and cannot be used for lap measurement.
+1. **Domain randomization** — train across a mix of tracks to mitigate the generalization failure.
+2. **Curriculum learning** — train from easy to hard (`map` → `map2` → `map3` → `map4`) so the policy progressively masters difficult corners.
+3. **Recurrent policy** — replace the hand-built action history with an LSTM/GRU for more natural temporal memory.
+4. **Multiple seeds and statistical testing** — repeat with 3–5 seeds and add significance tests.
+5. **Hyperparameter search** — systematically sweep the PPO configuration.
 
 ---
 
-## 9. Future Work
-
-1. **Domain randomization** — train across mixed maps to attack the generalization failure directly.
-2. **Curriculum learning** — `map` → `map2` → `map3` → `map4`, easiest first.
-3. **Recurrent policy (LSTM/GRU)** to replace the hand-built `action_history` with learned temporal memory.
-4. **Multi-seed replication** (3–5 seeds) with statistical significance testing.
-5. **Longer training** past the point where curves plateau, so asymptotic performance can be compared.
-6. **Finer action space** — add an explicit no-op, reduce the steering increment (10° → 2–5°), or move to continuous control with SAC/TD3. This is the controlled test of the §7 hypothesis.
-7. **Reward-weight sensitivity ablation**, after normalizing component magnitudes.
-
----
-
-## 10. Installation and Reproduction
+## 9. Installation and Reproduction
 
 ### Requirements
 - Python 3.8+; runs on native Windows and WSL2
 - Training is headless by default — no display required
-- **CPU-bound**, not GPU-bound: a multi-core CPU to raise `--n-envs` matters far more than a graphics card
+- **CPU-bound**, not GPU-bound: more CPU cores (to raise `--n-envs`) matter far more than a graphics card
 
 ```bash
 git clone https://github.com/h-s-i-u/rl-car-reward-vs-observation
@@ -296,7 +268,7 @@ python train.py --exp baseline --map assets/maps/map3.png \
                 --timesteps 500000 --seed 42 --n-envs 16 --vec subproc
 # --exp accepts: baseline / reward_only / obs_only / full
 ```
-Output lands in `logs/ppo_{exp}_{map}_{timestamp}_s{seed}/` with `final_model.zip`, periodic checkpoints, and an `exp_config.json` recording every setting used — which is what makes runs reproducible and evaluation self-configuring.
+Output lands in `logs/ppo_{exp}_{map}_{timestamp}_s{seed}/` with `final_model.zip`, periodic checkpoints, and an `exp_config.json` recording every setting used.
 
 Full ablation sweep (all four conditions): `./run_all.ps1`
 
@@ -304,7 +276,7 @@ Full ablation sweep (all four conditions): `./run_all.ps1`
 ```bash
 python eval.py logs/ppo_full_map3_<timestamp>_s42/final_model.zip --episodes 20
 ```
-`eval.py` reads the obs/reward configuration back from the `exp_config.json` beside the model, so evaluation can never be silently mismatched to training. Add `--render` to watch live, or `--map` to run the cross-track generalization test.
+`eval.py` reads the observation/reward configuration back from the `exp_config.json` beside the model, so evaluation can never be silently mismatched to training. Add `--render` to watch live, or `--map` to run the cross-track generalization test.
 
 ### Visualize and monitor
 ```bash
@@ -314,63 +286,53 @@ tensorboard --logdir ./logs/tb/
 
 ---
 
-## 11. Verifying the Results
+## 10. Repository Contents
 
-Every trained policy, evaluation output, and training curve quoted in this README is **committed to the repository** — none of the numbers above require taking our word for it:
+The trained models, evaluation outputs, and TensorBoard curves behind every number above are **committed to this repository**, so the results can be re-run without retraining:
 
-| Artifact | Path | What it lets you check |
-|---|---|---|
-| Trained policies | `logs/*/final_model.zip` | Re-run any condition's evaluation yourself |
-| Evaluation metrics | `logs/*/eval_results.json` | The exact per-episode and aggregate numbers in §5.2 |
-| Run configuration | `logs/*/exp_config.json` | Which reward/obs components and hyperparameters each run used |
-| Training curves | `logs/tb/` | The §5.1 curves, including the non-convergence claim |
-
-To reproduce the §5.2 table without retraining:
+| Artifact | Path |
+|---|---|
+| Trained policies | `logs/*/final_model.zip` |
+| Evaluation metrics | `logs/*/eval_results.json` |
+| Run configuration | `logs/*/exp_config.json` |
+| Training curves | `logs/tb/` |
 
 ```bash
-python eval.py logs/ppo_full_map3_20260527_042616_s42/final_model.zip --episodes 20
-python eval.py logs/ppo_obs_only_map3_20260527_040739_s42/final_model.zip --episodes 20
+# Reproduce the §5.3 ablation table without retraining
+python eval.py logs/ppo_baseline_map3_20260527_033037_s42/final_model.zip    --episodes 20
 python eval.py logs/ppo_reward_only_map3_20260527_034916_s42/final_model.zip --episodes 20
-python eval.py logs/ppo_baseline_map3_20260527_033037_s42/final_model.zip --episodes 20
-```
+python eval.py logs/ppo_obs_only_map3_20260527_040739_s42/final_model.zip    --episodes 20
+python eval.py logs/ppo_full_map3_20260527_042616_s42/final_model.zip        --episodes 20
 
-To reproduce the §5.3 generalization failure — the same policy on its own track, then on the winding one:
-
-```bash
+# Reproduce the §5.2 generalization test
 python eval.py logs/ppo_baseline_map_20260527_010212_s42/final_model.zip --map assets/maps/map.png  --episodes 20
 python eval.py logs/ppo_baseline_map_20260527_010212_s42/final_model.zip --map assets/maps/map3.png --episodes 20
 ```
 
-> ⚠️ **Known issue:** `eval.py` writes `eval_results.json` next to the model without recording *which* map it evaluated on, so running the two commands above in sequence overwrites the first result. The committed `eval_results.json` for that run is therefore the **`map3` (out-of-distribution)** evaluation. Recording the eval map in the output is a pending fix.
-
-Mid-training checkpoints are excluded from version control (~8.6 MB of intermediate state that adds nothing the final models and curves don't already provide).
-
----
-
-## 12. Project Structure
+> **Note:** `eval.py` writes `eval_results.json` next to the model without recording *which* map it evaluated on, so running the two generalization commands in sequence overwrites the first result. The committed `eval_results.json` for that run is therefore the **`map3` (out-of-distribution)** evaluation.
 
 ```
-├── car_env.py              # Gymnasium env: kinematics, radar ray-casting, pixel
-│                           #   collision, pluggable obs/reward, lap detection
-├── configs.py              # Single source of truth: map metadata, locked PPO
-│                           #   hyperparameters, reward/obs sets, 4 conditions
-├── train.py                # PPO training entry point (vectorized, checkpointed)
-├── eval.py                 # Crash rate, lap time, jerk, switch rate, distance
-├── trajectory_viz.py       # Trajectory overlay analysis
-├── lap.py                  # Standalone LapDetector (earlier iteration; the live
-│                           #   logic is inlined in car_env._check_lap)
-├── tools/pick_coords.py    # Click a map to print pixel coords — used to
+├── car_env.py              # Gymnasium env: kinematics, radar, collision,
+│                           #   pluggable obs/reward, lap detection
+├── configs.py              # Map metadata, locked PPO hyperparameters,
+│                           #   reward/obs component sets, 4 ablation conditions
+├── train.py                # PPO training entry point
+├── eval.py                 # Episode length, crash rate, jerk, action switch rate
+├── trajectory_viz.py       # Trajectory overlay visualization
+├── lap.py                  # Standalone LapDetector (the live logic is inlined
+│                           #   in car_env._check_lap)
+├── tools/pick_coords.py    # Click a map to print pixel coordinates — used to
 │                           #   calibrate finish lines and start poses
 ├── run_all.ps1             # Batch training over the four conditions
 ├── eval_all.ps1            # Batch cross-map evaluation
-├── assets/maps/            # map.png ~ map6.png (map and map3 calibrated)
-└── logs/                   # Committed results: trained models, eval metrics,
-                            #   run configs, TensorBoard curves (see §11)
+├── assets/maps/            # map.png ~ map6.png
+├── docs/                   # Figures used in this README
+└── logs/                   # Committed results (see table above)
 ```
 
 ---
 
-## 13. References
+## 11. References
 
 1. J. Schulman, F. Wolski, P. Dhariwal, A. Radford, O. Klimov, "Proximal Policy Optimization Algorithms," arXiv:1707.06347, 2017.
 2. J. Schulman, P. Moritz, S. Levine, M. Jordan, P. Abbeel, "High-Dimensional Continuous Control Using Generalized Advantage Estimation," *ICLR*, 2016.

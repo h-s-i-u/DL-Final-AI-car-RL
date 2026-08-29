@@ -11,6 +11,9 @@ build/
 # which should not be committed to a public repository). Linked from the README.
 *.pdf
 
+# Personal study notes — extra analysis not in the report or README.
+note.md
+
 # --- Training artifacts ---
 # Results ARE tracked, so every number in the README can be verified and re-run:
 #   logs/*/eval_results.json  evaluation metrics quoted in the README
