@@ -282,8 +282,8 @@ Stated plainly — these mark future work, not a retraction of the results.
 - **CPU-bound**, not GPU-bound: a multi-core CPU to raise `--n-envs` matters far more than a graphics card
 
 ```bash
-git clone https://github.com/h-s-i-u/DL-Final-AI-car-RL.git
-cd DL-Final-AI-car-RL
+git clone https://github.com/h-s-i-u/rl-car-reward-vs-observation
+cd rl-car-reward-vs-observation
 
 pip install -r requirements.txt
 # trajectory_viz.py additionally needs:
